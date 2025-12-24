@@ -1,14 +1,155 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ====================================================================
+// USER MODEL
+// ====================================================================
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  attempts  Attempt[]
+
+  @@map("users")
+}
+
+// ====================================================================
+// QUIZ MODEL
+// ====================================================================
+
+model Quiz {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  questions   Question[]
+  attempts    Attempt[]
+
+  @@map("quizzes")
+}
+
+// ====================================================================
+// QUESTION MODEL
+// ====================================================================
+
+model Question {
+  id          String  @id @default(uuid()) @db.Uuid
+  quizId      String  @map("quiz_id") @db.Uuid
+  content     String  @db.Text
+  explanation String  @db.Text
+  order       Int
+
+  // Relations
+  quiz            Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options         Option[]
+  attemptAnswers  AttemptAnswer[]
+
+  @@unique([quizId, order])
+  @@index([quizId])
+  @@map("questions")
+}
+
+// ====================================================================
+// OPTION MODEL
+// ====================================================================
+
+model Option {
+  id         String  @id @default(uuid()) @db.Uuid
+  questionId String  @map("question_id") @db.Uuid
+  content    String  @db.Text
+  isCorrect  Boolean @default(false) @map("is_correct")
+
+  // Relations
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  attemptAnswers AttemptAnswer[]
+
+  @@index([questionId])
+  @@map("options")
+}
+
+// ====================================================================
+// ATTEMPT MODEL
+// ====================================================================
+
+model Attempt {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  quizId     String   @map("quiz_id") @db.Uuid
+  score      Int
+  percentage Decimal  @db.Decimal(5, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz            Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers         AttemptAnswer[]
+  notifications   Notification[]
+
+  @@index([userId])
+  @@index([quizId])
+  @@index([createdAt])
+  @@map("attempts")
+}
+
+// ====================================================================
+// ATTEMPT ANSWER MODEL
+// ====================================================================
+
+model AttemptAnswer {
+  id               String  @id @default(uuid()) @db.Uuid
+  attemptId        String  @map("attempt_id") @db.Uuid
+  questionId       String  @map("question_id") @db.Uuid
+  selectedOptionId String  @map("selected_option_id") @db.Uuid
+  isCorrect        Boolean @map("is_correct")
+
+  // Relations
+  attempt        Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption Option   @relation(fields: [selectedOptionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+  @@map("attempt_answers")
+}
+
+// ====================================================================
+// NOTIFICATION MODEL
+// ====================================================================
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Notification {
+  id           String             @id @default(uuid()) @db.Uuid
+  attemptId    String             @map("attempt_id") @db.Uuid
+  status       NotificationStatus @default(PENDING)
+  errorMessage String?            @map("error_message") @db.Text
+  createdAt    DateTime           @default(now()) @map("created_at")
+  sentAt       DateTime?          @map("sent_at")
+
+  // Relations
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
+  @@index([status])
+  @@map("notifications")
 }
